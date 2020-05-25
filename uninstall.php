@@ -35,6 +35,7 @@ global $wpdb;
 $table_name = $wpdb->prefix . "printify_order_ids";
 $wpdb->query( "DROP TABLE IF EXISTS $table_name" );
 
+//Deleting custom Printify product
 wp_delete_post( get_option('printify_print_providers_custom_product_id'), true );
 
 //Removing Custom options created with the plugin

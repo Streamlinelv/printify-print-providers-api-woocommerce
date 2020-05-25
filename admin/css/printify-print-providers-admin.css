@@ -38,7 +38,12 @@
 }
 
 .printify-print-providers-status{
-	margin: 10px 0;
+	margin-top: 20px;
+}
+
+.printify-print-providers-status p{
+	display: inline-block;
+	margin: 0px 0 10px;
 }
 
 .printify-print-providers-status input,
@@ -49,4 +54,23 @@
 .printify-print-providers-status .select2-container{
 	min-width: 200px;
 	width: 25% !important;
+}
+
+.printify-print-providers-order-status{
+	vertical-align: middle;
+}
+
+.printify-print-providers-order-status.order-status{
+	background: none;
+	border: 0 none;
+}
+
+.printify-print-providers-order-status img{
+	height: 35px;
+	-webkit-border-radius: 50%;
+	-moz-border-radius: 50%;
+	border-radius: 50%;
+	-webkit-box-shadow: 5px 4px 12px -4px rgba(0,0,0,0.15);
+	-moz-box-shadow: 5px 4px 12px -4px rgba(0,0,0,0.15);
+	box-shadow: 5px 4px 12px -4px rgba(0,0,0,0.15);
 }

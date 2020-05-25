@@ -160,10 +160,12 @@ class Printify_Print_Providers {
 		$this->loader->add_filter( 'woocommerce_get_sections_advanced', $plugin_admin, 'add_printify_section' );
 		$this->loader->add_filter( 'woocommerce_get_settings_advanced', $plugin_admin, 'add_printify_settings', 10, 2 );
 		$this->loader->add_filter( 'plugin_action_links_' . PRINTIFY_PRINT_PROVIDERS_BASENAME, $plugin_admin, 'add_settings_link' );
-		$this->loader->add_action( 'plugins_loaded', $plugin_admin, 'update_database'); //Updating database if necessary
-		$this->loader->add_action( 'woocommerce_after_order_itemmeta', $plugin_admin, 'add_custom_ordered_product_fields', 3, 20); 
-		$this->loader->add_action( 'save_post', $plugin_admin, 'save_custom_ordered_product_fields', 3, 20); 
-
+		$this->loader->add_action( 'plugins_loaded', $plugin_admin, 'update_database' ); //Updating database if necessary
+		$this->loader->add_action( 'woocommerce_after_order_itemmeta', $plugin_admin, 'add_custom_ordered_product_fields', 3, 20 ); 
+		$this->loader->add_action( 'save_post', $plugin_admin, 'save_custom_ordered_product_fields', 3, 20 ); 
+		$this->loader->add_action( 'before_delete_post', $plugin_admin, 'delete_printify_order' );
+		$this->loader->add_filter( 'manage_edit-shop_order_columns', $plugin_admin, 'add_printify_column', 20 );
+		$this->loader->add_action( 'manage_posts_custom_column', $plugin_admin, 'insert_data_in_printify_column' );
 	}
 
 	/**

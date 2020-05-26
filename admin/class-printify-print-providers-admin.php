@@ -232,8 +232,8 @@ class Printify_Print_Providers_Admin {
 
 		if(!get_option('printify_print_providers_custom_product_id') || !get_post($product_id)){ //Creating the product if it does not exist or has been deleted
 			$product_data = array(
-				'post_title'	=> __( 'Global Printify product', 'printify-print-providers' ),
-				'post_content'	=> sprintf(__( 'This product was automatically created by %s plugin. It is used to synchronize orders from Printify.', 'printify-print-providers' ), PRINTIFY_PRINT_PROVIDERS_PLUGIN_NAME),
+				'post_title'	=> __( 'Custom Printify product', 'printify-print-providers' ),
+				'post_content'	=> sprintf(__( 'This product was automatically created by %s plugin. It is used to synchronize orders from Printify. If you are selling multiple variations of this product, please create variations and set each variation its SKU. After that you should email your SKU values to Printify to make the necessary configuration on their side.', 'printify-print-providers' ), PRINTIFY_PRINT_PROVIDERS_PLUGIN_NAME),
 				'post_author'   => 1,
 				'post_type'		=> 'product'
 			);
@@ -396,86 +396,109 @@ class Printify_Print_Providers_Admin {
 					// Now we create the order
 					$order = wc_create_order();
 					$product_id = $this->create_custom_printify_product(); //Creating a new product if it doesn't already exist
-					$product = wc_get_product($product_id); //Retrieving Printify custom product ID
 					$affected_items = array();
+					$errors = array();
 
 					//Adding line items to our new order coming in from Printify
 					foreach ($body->items as $key => $item) {
-						$product->set_name($item->sku . ' (ID: ' . $item->id . ')');
-						$line_item_id = $order->add_product( $product, $item->quantity ); //Adding product to the order
-						
-						//Adding custom meta data to each product
-						$print_files = array();
-						$preview_files = array();
-						foreach ($item->print_files as $key => $print_file) {
-							$print_files[$key] = $print_file; //Create an array of print files
+						$product_id = wc_get_product_id_by_sku($item->sku); //Retrieving product variation by SKU
+						$product = wc_get_product($product_id);
+
+						if($product){
+							$product->set_name($product->get_name() . ' (ID: ' . $item->id . ')');
+							$line_item_id = $order->add_product( $product, $item->quantity ); //Adding product to the order
+							
+							//Adding custom meta data to each product
+							$print_files = array();
+							$preview_files = array();
+							foreach ($item->print_files as $key => $print_file) {
+								$print_files[$key] = $print_file; //Create an array of print files
+							}
+							foreach ($item->preview_files as $key => $preview_file) {
+								$preview_files[$key] = $preview_file; //Create an array of preview files
+							}
+							wc_add_order_item_meta($line_item_id, 'printify_files', array(
+								'print_files' => $print_files,
+								'preview_files' => $preview_files
+							));
+
+							//Updating line item status to Created
+							update_post_meta( $line_item_id, '_printify_print_providers_item_status', 0 );
+							$affected_items[$line_item_id] = $item->id;
+
+						}else{ //In case we are unable to identify item's SKU received from Printify
+							$errors[] = array(
+								'field' 	=> 'item',
+								'message' 	=> 'Received product SKU: '. $item->sku .' does not exist',
+								'code' 		=> 'item' // Optional attribute
+							);
 						}
-						foreach ($item->preview_files as $key => $preview_file) {
-							$preview_files[$key] = $preview_file; //Create an array of preview files
+					}
+
+					if(!$errors){ //If no errors have occured
+						// Set addresses
+						$order->set_address( $shipping_address, 'shipping' );
+						$order->set_address( $billing_address, 'billing' );
+
+						//Adding custom fields to the order
+						if( $email_to ){
+							$order->update_meta_data( 'Customer Email', $email_to );
 						}
-						wc_add_order_item_meta($line_item_id, 'printify_files', array(
-							'print_files' => $print_files,
-							'preview_files' => $preview_files
-						));
-
-						//Updating line item status to Created
-						update_post_meta( $line_item_id, '_printify_print_providers_item_status', 0 );
-						$affected_items[$line_item_id] = $item->id;
-					}
-
-					// Set addresses
-					$order->set_address( $shipping_address, 'shipping' );
-					$order->set_address( $billing_address, 'billing' );
-
-					//Adding custom fields to the order
-					if( $email_to ){
-						$order->update_meta_data( 'Customer Email', $email_to );
-					}
-					if(isset($body->sample)){
-						$order->update_meta_data( 'Sample', 'Yes' );
-					}
-					if(isset($body->reprint)){
-						$order->update_meta_data( 'Reprint', 'Yes' );
-					}
-					if(isset($body->xqc)){
-						$order->update_meta_data( 'Extra Quality Care', 'Yes' );
-					}
-					$order->update_meta_data( '_printify_order', 1 ); //Used to determine if the order came from Printify
-
-					if(isset($body->shipping)){
-						$carier = '';
-						$priority = '';
-						if(isset($body->shipping->carrier)){
-							$carier = $body->shipping->carrier;
+						if(isset($body->sample)){
+							$order->update_meta_data( 'Sample', 'Yes' );
 						}
-						if(isset($body->shipping->priority)){
-							$priority = $body->shipping->priority;
+						if(isset($body->reprint)){
+							$order->update_meta_data( 'Reprint', 'Yes' );
 						}
-						$order->update_meta_data( 'Shipping information', $carier . ',' . $priority );
+						if(isset($body->xqc)){
+							$order->update_meta_data( 'Extra Quality Care', 'Yes' );
+						}
+						$order->update_meta_data( '_printify_order', 1 ); //Used to determine if the order came from Printify
+
+						if(isset($body->shipping)){
+							$carier = '';
+							$priority = '';
+							if(isset($body->shipping->carrier)){
+								$carier = $body->shipping->carrier;
+							}
+							if(isset($body->shipping->priority)){
+								$priority = $body->shipping->priority;
+							}
+							$order->update_meta_data( 'Shipping information', $carier . ',' . $priority );
+						}
+
+						$order->calculate_totals();
+						$order->update_status( 'processing', __('Received a new order from Printify', 'printify-print-providers'), TRUE );
+						$new_order_id = $order->get_id(); //Newly created WooCommerce order's ID
+						$this->link_order_id($body->id, $new_order_id); //Inserting in the database a new row linking both Order ids
+
+						//Creating array to be passed to events function
+						$event_array = array(
+							$item->id => array(
+								'action' => 'Created',
+								'affected_items' => $affected_items
+							)
+						);
+						$this->add_printify_note($event_array, $new_order_id); //Adding note used by Printify Tracking API
+
+						$response = array(
+							'status'		=> 'success',
+							'code'			=> 200,
+							'id'			=> $body->id,
+							'reference_id'	=> $new_order_id,
+							'message'		=> 'Printify order successfully ceated. Order: ' . $new_order_id,
+							'level'			=> 'info'
+						);
+
+					}else{ //If some of the products were not created
+						$response = array(
+							'status'	=> 'failed',
+							'code'		=> 422,
+				  			'message'	=> 'Unable to add all or some of the products. Order: ' . $body->id .'. Errors: ' . json_encode($errors),
+				  			'level'		=> 'warning',
+				  			'errors'	=> $errors
+						);
 					}
-
-					$order->calculate_totals();
-					$order->update_status( 'processing', __('Received a new order from Printify', 'printify-print-providers'), TRUE );
-					$new_order_id = $order->get_id(); //Newly created WooCommerce order's ID
-					$this->link_order_id($body->id, $new_order_id); //Inserting in the database a new row linking both Order ids
-
-					//Creating array to be passed to events function
-					$event_array = array(
-						$item->id => array(
-							'action' => 'Created',
-							'affected_items' => $affected_items
-						)
-					);
-					$this->add_printify_note($event_array, $new_order_id); //Adding note used by Printify Tracking API
-
-					$response = array(
-						'status'		=> 'success',
-						'code'			=> 200,
-						'id'			=> $body->id,
-						'reference_id'	=> $new_order_id,
-						'message'		=> 'Printify order successfully ceated. Order: ' . $new_order_id,
-						'level'			=> 'info'
-					);
 
 				}else{ //If order has already been created
 					$response = array(
@@ -645,30 +668,60 @@ class Printify_Print_Providers_Admin {
 								}
 
 								if(isset($body->sample)){ //If required to update Sample field
-									if($body->sample == true){
-										$order->update_meta_data( 'Sample', 'Yes' );
+									$current_sample_value = $order->get_meta( 'Sample' );
+									//Checking if field differs from the new one
+									if($current_sample_value == 'Yes'){
+										$current_sample_value = true;
 									}else{
-										$order->update_meta_data( 'Sample', 'No' );
+										$current_sample_value = false;
 									}
-									$updated_fields[] = 'Sample'; //Adding updated fields to the array
+
+									if($body->sample !== $current_sample_value){ //If Reprint differs, update the value
+										if($body->sample == true){
+											$order->update_meta_data( 'Sample', 'Yes' );
+										}else{
+											$order->update_meta_data( 'Sample', 'No' );
+										}
+										$updated_fields[] = 'Sample'; //Adding updated fields to the array
+									}
 								}
 
 								if(isset($body->reprint)){ //If required to update Reprint field
-									if($body->reprint == true){
-										$order->update_meta_data( 'Reprint', 'Yes' );
+									$current_reprint_value = $order->get_meta( 'Reprint' );
+									//Checking if field differs from the new one
+									if($current_reprint_value == 'Yes'){
+										$current_reprint_value = true;
 									}else{
-										$order->update_meta_data( 'Reprint', 'No' );
+										$current_reprint_value = false;
 									}
-									$updated_fields[] = 'Reprint'; //Adding updated fields to the array
+
+									if($body->reprint !== $current_reprint_value){ //If Reprint differs, update the value
+										if($body->reprint == true){
+											$order->update_meta_data( 'Reprint', 'Yes' );
+										}else{
+											$order->update_meta_data( 'Reprint', 'No' );
+										}
+										$updated_fields[] = 'Reprint'; //Adding updated fields to the array
+									}
 								}
 
 								if(isset($body->xqc)){ //If required to update XQC field
-									if($body->xqc == true){
-										$order->update_meta_data( 'Extra Quality Care', 'Yes' );
+									$current_xqc_value = $order->get_meta( 'Extra Quality Care' );
+									//Checking if field differs from the new one
+									if($current_xqc_value == 'Yes'){
+										$current_xqc_value = true;
 									}else{
-										$order->update_meta_data( 'Extra Quality Care', 'No' );
+										$current_xqc_value = false;
 									}
-									$updated_fields[] = 'Extra Quality Care'; //Adding updated fields to the array
+
+									if($body->xqc !== $current_xqc_value){ //If Reprint differs, update the value
+										if($body->xqc == true){
+											$order->update_meta_data( 'Extra Quality Care', 'Yes' );
+										}else{
+											$order->update_meta_data( 'Extra Quality Care', 'No' );
+										}
+										$updated_fields[] = 'Extra Quality Care'; //Adding updated fields to the array
+									}
 								}
 
 								if(isset($body->address_to)){ //If required to update Address_to fields
@@ -743,63 +796,132 @@ class Printify_Print_Providers_Admin {
 									$product = wc_get_product($product_id); //Retrieving Printify custom product ID
 									$affected_items = array();
 									$line_items = $order->get_items();
+									$printify_line_item_ids = array();
+									$existing_line_item_ids = array();
 
-									//Checking line items coming from Printify that must be updated
-									foreach ($body->items as $key => $item) {
-										//Must check if update request includes all product ID's already existing in the order
-										//If at leat one of the product's is missing, we cancel the update
-										foreach ($line_items as $line_id => $line_item) {
-											$item_id_and_sku = $this->get_line_item_id_and_sku($line_item); //Retrieving product's name and sku
-											$line_item_id = $item_id_and_sku['id'];
-											if( $line_item_id == $item->id){ //If we find a matching ID
-												if(isset($item->sku)){ //Updating SKU
-													$line_item->set_name($item->sku . ' (ID: ' . $item->id . ')');
-													$updated_fields[] = 'SKU'; //Adding updated fields to the array
-												}
+									//Building two arrays. For checking if all product ID values coming from Printify exist in our Order
+									foreach ($body->items as $key => $item){
+										$printify_line_item_ids[] = $item->id;
+									}
+									foreach ($line_items as $line_id => $line_item){
+										$existing_line_item_ids[] = $this->get_line_item_id($line_item);
+									}
 
-												if(isset($item->preview_files) && isset($item->print_files)){ //Updating Print and Preview files
-													$preview_files = array();
-													$print_files = array();
+									if(count(array_intersect($printify_line_item_ids, $existing_line_item_ids)) == count($printify_line_item_ids)){
+										//Checking line items coming from Printify that must be updated
+										foreach ($body->items as $key => $item) {
+											//Must check if update request includes all product ID's already existing in the order
+											//If at leat one of the product is missing, we cancel the update
+											foreach ($line_items as $line_id => $line_item) {
+												$line_item_id = $this->get_line_item_id($line_item); //Retrieving product's ID
 
-													foreach ($item->preview_files as $key => $preview_file) {
-														$preview_files[$key] = $preview_file; //Create an array of preview files
+												if( $line_item_id == $item->id){ //If we find a matching ID
+													//In case the order would like to update SKU, we must first check if a product with given SKU exists in our store. If it does, we are removing current line item and adding a new one instead
+													if(isset($item->sku)){ //Updating SKU
+														//In case the order wants to update SKU value, must first check if a product with given SKU exists in WooCommerce
+														if(wc_get_product_id_by_sku($item->sku)){
+
+															//Getting current line item SKU value
+															if(wc_get_product($line_item->get_variation_id())){ //If we have variations
+																$current_product = wc_get_product($line_item->get_variation_id());
+																$current_sku = $current_product->get_sku();
+															}else{
+																$current_product = wc_get_product($line_item->get_product_id());
+																$current_sku = $current_product->get_sku();
+															}
+
+															if( $current_sku !== $item->sku){ //Checking if the new SKU value is different from the one we already had
+																$printify_product_id = wc_get_product_id_by_sku($item->sku);
+																$product_object = wc_get_product( $printify_product_id );
+																$product_price = $product_object->get_price();
+
+																wc_delete_order_item($line_id); //Removing existing line item
+
+																$product_object->set_name($product_object->get_name() . ' (ID: ' . $line_item_id . ')');
+																$line_item_id = $order->add_product( $product_object, $item->quantity ); //Adding new line item with the SKU from Printify
+
+																//Adding custom meta data to each product
+																$print_files = array();
+																$preview_files = array();
+																foreach ($item->print_files as $file_key => $print_file) {
+																	$print_files[$file_key] = $print_file; //Create an array of print files
+																}
+																foreach ($item->preview_files as $file_key => $preview_file) {
+																	$preview_files[$file_key] = $preview_file; //Create an array of preview files
+																}
+																wc_add_order_item_meta($line_item_id, 'printify_files', array(
+																	'print_files' => $print_files,
+																	'preview_files' => $preview_files
+																));
+
+																//Updating line item status to Created
+																update_post_meta( $line_item_id, '_printify_print_providers_item_status', 0 );
+																$updated_fields[] = 'SKU'; //Adding updated fields to the array
+
+															}
+
+														}else{ //If unable to update line item SKU
+															$errors[] = array(
+																'field'		=> 'sku',
+																'message'	=> 'Product SKU: '. $item->sku .' does not exist. Order: '. $order_id->woocommerce_order_id .'. Line item: ' . $line_item_id,
+																'code'		=> 'item'
+															);
+														}
 													}
-													foreach ($item->print_files as $key => $print_file) {
-														$print_files[$key] = $print_file; //Create an array of print files
-													}
-													wc_update_order_item_meta($line_id, 'printify_files', array(
-														'print_files' => $print_files,
-														'preview_files' => $preview_files
-													));
-													$updated_fields[] = 'Print and Preview files'; //Adding updated fields to the array
 
-												}else{//In case we do not receive Print and Preview files in the request
-													$errors[] = array(
-														'field'		=> 'item',
-														'message'	=> 'Update request for the item did not include both Preview and Print files. Order: '. $order_id->woocommerce_order_id .'. Line item: ' . $line_item_id,
-														'code'		=> 'item'
-													);
-												}
+													if(isset($item->preview_files) && isset($item->print_files)){ //Updating Print and Preview files
+														$preview_files = array();
+														$print_files = array();
 
-												if(isset($item->quantity)){ //Updating Quantity
-													if($item->quantity > 0){
-														$line_item->set_quantity( $item->quantity );
-														//Updating line item totals and subtotals
-														$line_item->set_subtotal( $product->get_price() * $item->quantity );
-														$line_item->set_total( $product->get_price() * $item->quantity );
-														$updated_fields[] = 'Item quantity'; //Adding updated fields to the array
+														foreach ($item->preview_files as $key => $preview_file) {
+															$preview_files[$key] = $preview_file; //Create an array of preview files
+														}
+														foreach ($item->print_files as $key => $print_file) {
+															$print_files[$key] = $print_file; //Create an array of print files
+														}
+														wc_update_order_item_meta($line_id, 'printify_files', array(
+															'print_files' => $print_files,
+															'preview_files' => $preview_files
+														));
+														$updated_fields[] = 'Print and Preview files'; //Adding updated fields to the array
 
-													}else{
+													}else{//In case we do not receive Print and Preview files in the request
 														$errors[] = array(
-															'field'		=> 'item.quantity',
-															'message'	=> 'Item quantity value must be greater than 0. Order: '. $order_id->woocommerce_order_id .'. Line item: ' . $line_item_id,
+															'field'		=> 'item',
+															'message'	=> 'Update request for the item did not include both Preview and Print files. Order: '. $order_id->woocommerce_order_id .'. Line item: ' . $line_item_id,
 															'code'		=> 'item'
 														);
 													}
-													
+
+													if(isset($item->quantity)){ //Updating Quantity
+														//Checking if existing item quantity differs from the new one
+														if($item->quantity !== $line_item->get_quantity()){
+															if($item->quantity > 0){
+																$line_item->set_quantity( $item->quantity );
+																//Updating line item totals and subtotals
+																$line_item->set_subtotal( $product->get_price() * $item->quantity );
+																$line_item->set_total( $product->get_price() * $item->quantity );
+																$updated_fields[] = 'Item quantity'; //Adding updated fields to the array
+
+															}else{
+																$errors[] = array(
+																	'field'		=> 'item.quantity',
+																	'message'	=> 'Item quantity value must be greater than 0. Order: '. $order_id->woocommerce_order_id .'. Line item: ' . $line_item_id,
+																	'code'		=> 'item'
+																);
+															}
+														}
+													}
 												}
 											}
 										}
+
+									}else{
+										$errors[] = array(
+											'field'		=> 'sku',
+											'message'	=> 'Some of the IDs sent in the request do not match the ones existing in the current order. Order: '. $order_id->woocommerce_order_id,
+											'code'		=> 'item'
+										);
 									}
 								}
 
@@ -964,32 +1086,48 @@ class Printify_Print_Providers_Admin {
 					}
 
 					foreach ($items as $key => $item) { //Handling product line items
-						$item_id_and_sku = $this->get_line_item_id_and_sku($item); //Retrieving product's name and sku
+						$item_id = $this->get_line_item_id($item); //Retrieving product's ID
 						$product_data = $item->get_data();
 						$product_meta_data = $item->get_meta_data();
 						$preview_files = array();
 						$print_files = array();
+						$sku = 'Unknown';
+
+						if($item->get_variation_id()){ //Taking care of products with variations
+							$product = wc_get_product( $item->get_variation_id() );
+						}else{
+							$product = wc_get_product( $item->get_product_id() );
+						}
+
+						if($product){
+							if($product->get_sku()){
+								$sku = $product->get_sku();
+							}
+						}
+						
+
 						//Must get preview files and print files
 						foreach ($product_meta_data as $key => $object) { //Handling line item meta data
 							$data = $object->get_data();
-
-							foreach ($data['value'] as $key => $files) {
-								if($key == 'print_files'){
-									foreach ($files as $key => $file) {
-										$print_files[$key] = $file;
+							if( $data['key'] == 'printify_files' ){
+								foreach ($data['value'] as $key => $files) {
+									if($key == 'print_files'){
+										foreach ($files as $key => $file) {
+											$print_files[$key] = $file;
+										}
 									}
-								}
-								if($key == 'preview_files'){
-									foreach ($files as $key => $file) {
-										$preview_files[$key] = $file;
+									if($key == 'preview_files'){
+										foreach ($files as $key => $file) {
+											$preview_files[$key] = $file;
+										}
 									}
 								}
 							}
 						}
 
 						$line_items[] = array(
-							'id' 			=> $item_id_and_sku['id'],
-							'sku'			=> $item_id_and_sku['sku'],
+							'id' 			=> $item_id,
+							'sku'			=> $sku,
 							'preview_files' => $preview_files,
 							'print_files' 	=> $print_files,
 							'quantity'		=> $product_data['quantity']
@@ -1204,8 +1342,7 @@ class Printify_Print_Providers_Admin {
 								$product_data = $item->get_data();
 								$item_status = get_post_meta( $product_data['id'],'_printify_print_providers_item_status', true );
 								$status = $this->get_status($item_status);
-								$item_id_and_sku = $this->get_line_item_id_and_sku($item); //Retrieving product's name and sku
-								$line_item_printify_id = $item_id_and_sku['id'];
+								$line_item_printify_id = $this->get_line_item_id($item); //Retrieving product's ID
 
 								if($items_to_cancel){ //Canceling only specific items
 									if(in_array($line_item_printify_id, $items_to_cancel)){
@@ -1399,9 +1536,15 @@ class Printify_Print_Providers_Admin {
             if (!empty($product) && isset($product)){
 				$post_type = $product->post_type;
 				$product_id = $product->get_id();
-                $printify_product = get_option('printify_print_providers_custom_product_id');
+                $printify_product = get_post_meta( $item_id, '_printify_print_providers_item_status', true );
 
-                if (!empty($post_type) && ('product' === $post_type || 'product_variation' === $post_type)  && ($product_id == $printify_product)){ //If we are looking at a product and it is Printify product
+               	if( $printify_product === '' ){
+               		$printify_product = false;
+               	}else{
+               		$printify_product = true;
+               	}
+
+                if (!empty($post_type) && ('product' === $post_type || 'product_variation' === $post_type)  &&  $printify_product ) { //If we are looking at a product and it is Printify product
 
                 	//Getting current data values
 	                $item_status = get_post_meta( $item_id, '_printify_print_providers_item_status', true );
@@ -1512,8 +1655,7 @@ class Printify_Print_Providers_Admin {
 					//Going through line items to get ordered product name
 					foreach ($line_items as $key => $line_item){
 						if($item_id == $key){
-							$item_id_and_sku = $this->get_line_item_id_and_sku($line_item); //Retrieving product's name and sku
-							$line_item_printify_id = $item_id_and_sku['id'];
+							$line_item_printify_id = $this->get_line_item_id($line_item); //Retrieving product's ID
 						}
 					}
 
@@ -1681,31 +1823,23 @@ class Printify_Print_Providers_Admin {
 	}
 
 	/**
-	 * Function returns the name and the SKU value of a given order line item (ordered product) 
+	 * Function returns the ID value of a given order line item (ordered product) 
 	 *
 	 * @since    1.0
 	 * @return   array
 	 */
-	public function get_line_item_id_and_sku($line_item_id) {
+	public function get_line_item_id($line_item_id) {
 		$product_data = $line_item_id->get_data();
-		$product_name = $product_data['name']; //Printify product name stores both SKU and ID values
+		$product_name = $product_data['name']; //Printify product name stores Printify ID value
 		preg_match('/\(ID: ([^\"]*?)\)/', $product_name, $id_match); //Getting out ID
-		preg_match('/^(.*?) \(/', $product_name, $sku_match); //Getting out SKU
 
 		if(isset($id_match[1])){
 			$id = $id_match[1];
 		}else{
 			$id = 'Unknown';
 		}
-		if(isset($sku_match[1])){
-			$sku = $sku_match[1];
-		}else{
-			$sku = 'Unknown';
-		}
-		return array(
-			'id' => $id,
-			'sku' => $sku
-		);
+
+		return $id;
 	}
 
 	/**

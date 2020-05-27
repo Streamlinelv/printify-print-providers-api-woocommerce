@@ -189,7 +189,6 @@ class Printify_Print_Providers_Admin {
 					'title'		=> __( 'Printify products', 'printify-print-providers' ),
 					'type'		=> 'text',
 					'id'		=> 'printify_print_providers_product_ids',
-					'desc'		=> $description,
 					'desc_tip' => __( 'Add a comma sepparated list of your product IDs that are linked to Printify. E.g. 1001,1002,3879,4991', 'printify-print-providers' )
 				),
 

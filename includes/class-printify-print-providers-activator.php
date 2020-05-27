@@ -47,5 +47,8 @@ class Printify_Print_Providers_Activator {
 		//Generating API key if it hasn't been already created
 		add_option('printify_print_providers_api_key', implode('-', str_split(substr(strtolower(md5(microtime().rand(1000, 9999))), 0, 30), 6)));
 		update_option('printify_print_providers_statuses', array('Created','Picked','Printed','Packaged','Reprint','X-Updates','On hold','Shipped','Canceled'));
+
+		$plugin_admin = new Printify_Print_Providers_Admin(PRINTIFY_PRINT_PROVIDERS_SLUG, PRINTIFY_PRINT_PROVIDERS_VERSION);
+		$plugin_admin->create_custom_printify_product();
 	}
 }

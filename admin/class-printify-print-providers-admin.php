@@ -181,19 +181,27 @@ class Printify_Print_Providers_Admin {
 					'type'		=> 'text',
 					'id'		=> 'printify_print_providers_api_key',
 					'custom_attributes'	=> array(
-	                      'readonly'	=> true,
+	                      'readonly'	=> true
 	                )
+				),
+
+				array(
+					'title'		=> __( 'Printify products', 'printify-print-providers' ),
+					'type'		=> 'text',
+					'id'		=> 'printify_print_providers_product_ids',
+					'desc'		=> $description,
+					'desc_tip' => __( 'Add a comma sepparated list of your product IDs that are linked to Printify. E.g. 1001,1002,3879,4991', 'printify-print-providers' )
 				),
 
 				array(
 					'title'		=> __( 'Enable logging?', 'printify-print-providers' ),
 					'type'		=> 'checkbox',
 					'id'		=> 'printify_print_providers_logging',
-					'desc'		=> $description,
+					'desc'		=> $description
 				),
 
 				array(
-					'type'  => 'sectionend',
+					'type'  => 'sectionend'
 				),
 			);
 			
@@ -286,6 +294,163 @@ class Printify_Print_Providers_Admin {
 	}
 
 	/**
+	 * Function adds additional Pricing fields required by Printify Stock API to simple Printify products (set in API settings)
+	 *
+	 * @since    1.0
+	 */
+	function add_simple_product_pricing_fields(){
+		global $post;
+		$printify_product_ids = $this->get_printify_product_ids();
+
+		if(in_array($post->ID, $printify_product_ids)){ //If we are looking at Printify product
+			$blank_field = array(
+				'label' 		=> __( 'Blank price (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'id' 			=> 'printify_print_providers_blank_price',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Price for a blank product without print in USD cents', 'printify-print-providers' )
+			);
+
+			$processing_field = array(
+				'label' 		=> __( 'Processing fee (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'id' 			=> 'printify_print_providers_processing_fee',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Processing fee for the item in USD cents. If there is no additional processing fee, it should be set to 0', 'printify-print-providers' )
+			);
+
+			$printing_field = array(
+				'label' 		=> __( 'Printing price (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'id' 			=> 'printify_print_providers_printing_price',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Price object for printing the item. Price can be divided into multiple offers depending on the areas being printed. Prices should be expressed in USD cents', 'printify-print-providers' )
+			);
+
+			woocommerce_wp_text_input( $blank_field );
+			woocommerce_wp_text_input( $processing_field );
+			woocommerce_wp_text_input( $printing_field );
+		}
+	}
+
+	/**
+	 * Function saves additional Pricing fields required by Printify Stock API for simple products (set in API settings)
+	 *
+	 * @since    1.0
+	 */
+	function save_simple_product_pricing_fields( $post_id ) {
+		$blank_price 	= null;
+		$processing_fee = null;
+		$printing_price = null;
+
+		if(isset( $_POST[ 'printify_print_providers_blank_price'] )){
+			$blank_price = $_POST[ 'printify_print_providers_blank_price'];
+		}
+		if(isset( $_POST[ 'printify_print_providers_processing_fee'] )){
+			$processing_fee = $_POST[ 'printify_print_providers_processing_fee'];
+		}
+		if(isset( $_POST[ 'printify_print_providers_printing_price'] )){
+			$printing_price = $_POST[ 'printify_print_providers_printing_price'];
+		}
+
+		$blank_price = isset( $blank_price ) ? sanitize_text_field( $blank_price ) : '';
+		$processing_fee = isset( $processing_fee ) ? sanitize_text_field( $processing_fee ) : '';
+		$printing_price = isset( $printing_price ) ? sanitize_text_field( $printing_price ) : '';
+
+		$product = wc_get_product( $post_id );
+		$product->update_meta_data( 'printify_print_providers_blank_price', $blank_price );
+		$product->update_meta_data( 'printify_print_providers_processing_fee', $processing_fee );
+		$product->update_meta_data( 'printify_print_providers_printing_price', $printing_price );
+
+		$product->save();
+	}
+
+	/**
+	 * Function adds additional Pricing fields required by Printify Stock API to variable products (set in API settings)
+	 *
+	 * @since    1.0
+	 */
+	function add_variable_product_pricing_fields( $loop, $variation_data, $variation ) {
+		$variation_id = $variation->ID;
+		$post_parent = $variation->post_parent;
+		$printify_product_ids = $this->get_printify_product_ids();
+
+		if(in_array($variation_id, $printify_product_ids) || in_array($post_parent, $printify_product_ids)){ //If we are looking at Printify products
+			$blank_field = array(
+				'label' 		=> __( 'Blank price (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'wrapper_class' => 'form-row form-row-first',
+				'id' 			=> 'printify_print_providers_blank_price[' . $loop . ']',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Price for a blank product without print in USD cents', 'printify-print-providers' ),
+				'value' 		=> get_post_meta( $variation->ID, 'printify_print_providers_blank_price', true )
+			);
+
+			$processing_field = array(
+				'label' 		=> __( 'Processing fee (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'wrapper_class' => 'form-row form-row-last',
+				'id' 			=> 'printify_print_providers_processing_fee[' . $loop . ']',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Processing fee for the item in USD cents. If there is no additional processing fee, it should be set to 0', 'printify-print-providers' ),
+				'value' 		=> get_post_meta( $variation->ID, 'printify_print_providers_processing_fee', true )
+			);
+
+			$printing_field = array(
+				'label' 		=> __( 'Printing price (USD cents)', 'printify-print-providers' ),
+				'class' 		=> 'short',
+				'wrapper_class' => 'form-row form-row-first',
+				'id' 			=> 'printify_print_providers_printing_price[' . $loop . ']',
+				'type' 			=> 'text',
+				'desc_tip' 		=> true,
+				'description' 	=> __('Price object for printing the item. Price can be divided into multiple offers depending on the areas being printed. Prices should be expressed in USD cents', 'printify-print-providers' ),
+				'value' 		=> get_post_meta( $variation->ID, 'printify_print_providers_printing_price', true )
+			);
+
+			woocommerce_wp_text_input( $blank_field );
+			woocommerce_wp_text_input( $processing_field );
+			woocommerce_wp_text_input( $printing_field );
+		}
+	}
+
+	/**
+	 * Function saves additional Pricing fields required by Printify Stock API for variable products (set in API settings)
+	 *
+	 * @since    1.0
+	 */
+	function save_variable_product_pricing_field_data( $variation_id, $i ) {
+		$blank_price 	= null;
+		$processing_fee = null;
+		$printing_price = null;
+
+		if(isset( $_POST[ 'printify_print_providers_blank_price'][$i] )){
+			$blank_price = $_POST[ 'printify_print_providers_blank_price'][$i];
+		}
+		if(isset( $_POST[ 'printify_print_providers_processing_fee'][$i] )){
+			$processing_fee = $_POST[ 'printify_print_providers_processing_fee'][$i];
+		}
+		if(isset( $_POST[ 'printify_print_providers_printing_price'][$i] )){
+			$printing_price = $_POST[ 'printify_print_providers_printing_price'][$i];
+		}
+
+		$blank_price = isset( $blank_price ) ? sanitize_text_field( $blank_price ) : '';
+		$processing_fee = isset( $processing_fee ) ? sanitize_text_field( $processing_fee ) : '';
+		$printing_price = isset( $printing_price ) ? sanitize_text_field( $printing_price ) : '';
+
+		$product = wc_get_product( $variation_id );
+		$product->update_meta_data( 'printify_print_providers_blank_price', $blank_price );
+		$product->update_meta_data( 'printify_print_providers_processing_fee', $processing_fee );
+		$product->update_meta_data( 'printify_print_providers_printing_price', $printing_price );
+
+		$product->save();
+	}
+
+	/**
 	 * Function that verifies if the received request with X-API-KEY is valid or not
 	 *
 	 * @since    1.0
@@ -304,33 +469,58 @@ class Printify_Print_Providers_Admin {
 	 * @since    1.0
 	 */
 	public function create_custom_api_routes(){
-		register_rest_route( 'v2020-03', '/orders.json', array(
+		$printify_api_base = 'v2020-03';
+		register_rest_route( $printify_api_base, '/orders.json', array(
 			'methods' => 'POST',
 			'callback' => array($this, 'create_order'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( 'v2020-03/orders', '/(?P<printify_id>[a-z0-9\-]+).json', array(
+		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+).json', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'get_order'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( 'v2020-03/orders', '/(?P<printify_id>[a-z0-9\-]+)/events.json', array(
+		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+)/events.json', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'get_order_events'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( 'v2020-03/orders', '/(?P<printify_id>[a-z0-9\-]+).json', array(
+		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+).json', array(
 			'methods' => 'PUT',
 			'callback' => array($this, 'update_order'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( 'v2020-03/orders', '/(?P<printify_id>[a-z0-9\-]+)/cancel.json', array(
+		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+)/cancel.json', array(
 			'methods' => 'POST',
 			'callback' => array($this, 'cancel_order'),
+			'permission_callback' => array( $this, 'check_api_key' )
+		));
+
+		register_rest_route( $printify_api_base, '/stock.json', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'get_stock'),
+			'permission_callback' => array( $this, 'check_api_key' )
+		));
+
+		register_rest_route( $printify_api_base, '/stock/(?P<printify_id>[a-z0-9\-]+).json', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'get_stock'),
+			'permission_callback' => array( $this, 'check_api_key' )
+		));
+
+		register_rest_route( $printify_api_base, '/pricing.json', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'get_pricing'),
+			'permission_callback' => array( $this, 'check_api_key' )
+		));
+
+		register_rest_route( $printify_api_base, '/pricing/(?P<printify_id>[a-z0-9\-]+).json', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'get_pricing'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 	}
@@ -1037,7 +1227,6 @@ class Printify_Print_Providers_Admin {
 					//Get woocommerce order data
 					$order = wc_get_order($order_id->woocommerce_order_id);
 					$order_data = $order->get_data();
-					$order_meta_data = $order->get_meta_data();
 					$items = $order->get_items();
 
 					$sample = false;
@@ -1050,45 +1239,43 @@ class Printify_Print_Providers_Admin {
 					$phone_from = '';
 					$line_items = array();
 
-					foreach ($order_meta_data as $key => $object) { //Handling meta data
-						$data = $object->get_data();
-						if($data['key'] === 'Sample' && $data['value'] === 'Yes'){
-							$sample = true;
+					//Handling Order meta data
+					if($order->get_meta('Sample') === 'Yes'){
+						$sample = true;
+					}
+					if($order->get_meta('Reprint') === 'Yes'){
+						$reprint = true;
+					}
+					if($order->get_meta('Extra Quality Care') === 'Yes'){
+						$xqc = true;
+					}
+					if($order->get_meta('Shipping information')){
+						$parts = explode(',', $order->get_meta('Shipping information'), 2); //Splitting our string sepparated with a comma into parts
+						if(isset($parts[0])){
+							$carrier = $parts[0];
+						}else{
+							$carrier = '';
 						}
-						if($data['key'] === 'Reprint' && $data['value'] === 'Yes'){
-							$reprint = true;
-						}
-						if($data['key'] === 'Extra Quality Care' && $data['value'] === 'Yes'){
-							$xqc = true;
-						}
-						if($data['key'] === 'Shipping information'){
-							$parts = explode(',', $data['value'], 2); //Splitting our string sepparated with a comma into parts
-							if(isset($parts[0])){
-								$carrier = $parts[0];
-							}else{
-								$carrier = '';
-							}
-							if(isset($parts[1])){
-								$priority = $parts[1];
-							}else{
-								$priority = '';
-							}
-						}
-						if($data['key'] === 'Customer Email'){
-							$email = $data['value'];
-						}
-						if($data['key'] === '_shipping_email'){
-							$email_from = $data['value'];
-						}
-						if($data['key'] === '_shipping_phone'){
-							$phone_from = $data['value'];
+						if(isset($parts[1])){
+							$priority = $parts[1];
+						}else{
+							$priority = '';
 						}
 					}
+					if($order->get_meta('Customer Email')){
+						$email = $order->get_meta('Customer Email');
+					}
+					if($order->get_meta('_shipping_email')){
+						$email_from = $order->get_meta('_shipping_email');
+					}
+					if($order->get_meta('_shipping_phone')){
+						$phone_from = $order->get_meta('_shipping_phone');
+					}
 
-					foreach ($items as $key => $item) { //Handling product line items
+					//Handling product line items
+					foreach ($items as $key => $item) {
 						$item_id = $this->get_line_item_id($item); //Retrieving product's ID
 						$product_data = $item->get_data();
-						$product_meta_data = $item->get_meta_data();
 						$preview_files = array();
 						$print_files = array();
 						$sku = 'Unknown';
@@ -1104,25 +1291,14 @@ class Printify_Print_Providers_Admin {
 								$sku = $product->get_sku();
 							}
 						}
-						
 
 						//Must get preview files and print files
-						foreach ($product_meta_data as $key => $object) { //Handling line item meta data
-							$data = $object->get_data();
-							if( $data['key'] == 'printify_files' ){
-								foreach ($data['value'] as $key => $files) {
-									if($key == 'print_files'){
-										foreach ($files as $key => $file) {
-											$print_files[$key] = $file;
-										}
-									}
-									if($key == 'preview_files'){
-										foreach ($files as $key => $file) {
-											$preview_files[$key] = $file;
-										}
-									}
-								}
-							}
+						$printify_files = $item->get_meta('printify_files');
+						foreach ($printify_files['print_files'] as $key => $file) {
+							$print_files[$key] = $file;
+						}
+						foreach ($printify_files['preview_files'] as $key => $file) {
+							$preview_files[$key] = $file;
 						}
 
 						$line_items[] = array(
@@ -1503,6 +1679,197 @@ class Printify_Print_Providers_Admin {
 	}
 
 	/**
+	 * Function returns product stock levels
+	 * If request includes a specific SKU value, the response returns only specific SKU item stock.
+	 *
+	 * @since    1.0
+	 */
+	function get_stock($data){
+		if($this->woocommerce_is_activated()){
+			$product_found = false;
+			if(isset($data['printify_id'])){ //If we have received an order ID from Printify
+				$sku = $data['printify_id'];
+				$product_id = wc_get_product_id_by_sku($sku); //Retrieving product ID by SKU
+				if($product_id){ //If we have found Product
+					$product_found = true;
+				}else{
+					$response = array(
+						'status'	=> 'failed',
+						'code'		=> 404,
+			  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id'],
+			  			'level'		=> 'error'
+					);
+					$this->log( $response['level'], $response['message'] );
+					return new WP_REST_Response( $response, $response['code'] );
+				}
+			}
+			if($product_found){ //If a specific SKU has been passed and it has been retrieved
+				$printify_product_ids[] = $product_id;
+
+			}else{ //Returning all SKU stock levels since a specific SKU was not passed in the request
+				$printify_product_ids = $this->get_printify_product_ids();
+			}
+
+			$sku_array = array();
+
+			foreach ($printify_product_ids as $key => $product_id) {
+				$product = wc_get_product($product_id);
+				if($product){
+					$main_product_sku = $product->get_sku();
+					if($main_product_sku){ //If the product has SKU defined, adding it to the response 
+						if($product_found){
+							$sku_array = $this->add_product_stock($product);
+						}else{
+							$sku_array[$main_product_sku] = $this->add_product_stock($product);
+						}
+					}
+					$product_variations = $product->get_children();
+					foreach ($product_variations as $key => $variation_id) {
+						$variation_product = wc_get_product($variation_id);
+						$variable_product_sku = $variation_product->get_sku();
+						if($variable_product_sku){ //If the variable product has SKU defined, adding it to the response
+							$sku_array[$variable_product_sku] = $this->add_product_stock($variation_product);
+						}
+					}
+				}
+			}
+
+			//In case the request included limit and offset values (e.g. stock.json?limit=20&offset=0), we limit and prepare the response accordingly
+			if($data->get_params()){
+				$attributes = $data->get_params();
+				$limit = null;
+				$offset = null;
+				if(isset($attributes['limit'])){
+					$limit = $attributes['limit'];
+				}
+				if(isset($attributes['offset'])){
+					$offset = $attributes['offset'];
+				}
+				$sku_array = array_slice($sku_array, $offset, $limit); //Preparing the response
+			}
+			return new WP_REST_Response( $sku_array, 200 );
+		}
+	}
+
+	/**
+	 * Function returns product pricing
+	 * If request includes a specific SKU value, the response returns only specific SKU item pricing.
+	 *
+	 * @since    1.0
+	 */
+	function get_pricing($data){
+		if($this->woocommerce_is_activated()){
+			$product_found = false;
+			if(isset($data['printify_id'])){ //If we have received an order ID from Printify
+				$sku = $data['printify_id'];
+				$product_id = wc_get_product_id_by_sku($sku); //Retrieving product ID by SKU
+				if($product_id){ //If we have found Product
+					$product_found = true;
+				}else{
+					$response = array(
+						'status'	=> 'failed',
+						'code'		=> 404,
+			  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id'],
+			  			'level'		=> 'error'
+					);
+					$this->log( $response['level'], $response['message'] );
+					return new WP_REST_Response( $response, $response['code'] );
+				}
+			}
+			if($product_found){ //If a specific SKU has been passed and it has been retrieved
+				$printify_product_ids[] = $product_id;
+
+			}else{ //Returning all SKU stock levels since a specific SKU was not passed in the request
+				$printify_product_ids = $this->get_printify_product_ids();
+			}
+
+			$sku_array = array();
+
+			foreach ($printify_product_ids as $key => $product_id) {
+				$product = wc_get_product($product_id);
+				if($product){
+					$main_product_sku = $product->get_sku();
+					if($main_product_sku){ //If the product has SKU defined, adding it to the response
+						if($product_found){
+							$sku_array = $this->add_product_pricing($product);
+						}else{
+							$sku_array[$main_product_sku] = $this->add_product_pricing($product);
+						}
+					}
+					$product_variations = $product->get_children();
+					foreach ($product_variations as $key => $variation_id) {
+						$variation_product = wc_get_product($variation_id);
+						$variable_product_sku = $variation_product->get_sku();
+						if($variable_product_sku){ //If the variable product has SKU defined, adding it to the response
+							$sku_array[$variable_product_sku] = $this->add_product_pricing($variation_product);
+						}
+					}
+				}
+			}
+
+			//In case the request included limit and offset values (e.g. stock.json?limit=20&offset=0), we limit and prepare the response accordingly
+			if($data->get_params()){
+				$attributes = $data->get_params();
+				$limit = null;
+				$offset = null;
+				if(isset($attributes['limit'])){
+					$limit = $attributes['limit'];
+				}
+				if(isset($attributes['offset'])){
+					$offset = $attributes['offset'];
+				}
+				$sku_array = array_slice($sku_array, $offset, $limit); //Preparing the response
+			}
+			return new WP_REST_Response( $sku_array, 200 );
+		}
+	}
+
+	/**
+	 * Function prepares product stock for returning back to Printify
+	 *
+	 * @since    1.0
+	 * @return   array
+	 */
+	function add_product_stock($product){
+		$status = $product->get_stock_status();
+		if($status == 'instock'){
+			$status = 'in-stock';
+		}elseif($status == 'outofstock'){
+			$status = 'out-of-stock';
+		}else{
+			$status = 'unknown';
+		}
+
+		$stock_quantity = $product->get_stock_quantity();
+		if(empty($stock_quantity)){ //If Stock quantity is not defined or turned off, return unlimited quantity
+			$stock = 99999;
+		}else{
+			$stock = $stock_quantity;
+		}
+		return $sku_array = array(
+			'status' => $status,
+			'stock' => $stock
+		);
+	}
+
+	/**
+	 * Function prepares product pricing for returning back to Printify
+	 *
+	 * @since    1.0
+	 * @return   array
+	 */
+	function add_product_pricing($product){
+		return $sku_array = array(
+			'blank' 		=> $product->get_meta('printify_print_providers_blank_price'),
+			'processing' 	=> $product->get_meta('printify_print_providers_processing_fee'),
+			'printing'	 	=> array(
+				'areas'			=> array('all'),
+				'price'			=> $product->get_meta('printify_print_providers_printing_price')
+			)
+		);
+	}
+
+	/**
 	 * Function adds a note to the order that later can be passed to Printify as event
 	 *
 	 * $order_id = Order ID
@@ -1591,27 +1958,25 @@ class Printify_Print_Providers_Admin {
 					//Building url file output
 					foreach ($line_items as $key => $line_item) {
 						if($key == $item_id){
-							$line_item_meta_data = $line_item->get_meta_data();
 
-							foreach ($line_item_meta_data as $key => $data) {
-								$data = $data->get_data();
-								if($data['key'] == 'printify_files'){
-									$printify_files = $data['value'];
-									foreach ($printify_files as $key => $file) {
-										if($key == 'print_files'){
-											echo '<div class="printify-print-providers-print-files"><span class="printify-print-providers-label">Print files:</span>';
-											foreach ($file as $key => $url){
-												echo '<a class="button" href="' . $url . '" target="_blank" >' . $key . '</a>';
-											}
-											echo '</div>';
-										}
-										if($key == 'preview_files'){
-											echo '<div class="printify-print-providers-preview-files"><span class="printify-print-providers-label">Preview files:</span>';
-											foreach ($file as $key => $url){
-												echo '<a href="' . $url . '" target="_blank"><img src="' . $url . '"/></a>';
-											}
-										}
+							$printify_files = $line_item->get_meta('printify_files');
+							if($printify_files){
+								if(!empty($printify_files['print_files']) && isset($printify_files['print_files'])){
+									$print_files = $printify_files['print_files'];
+									echo '<div class="printify-print-providers-print-files"><span class="printify-print-providers-label">Print files:</span>';
+									foreach( $print_files as $key => $url ){
+										echo '<a class="button" href="' . $url . '" target="_blank" >' . $key . '</a>';
 									}
+									echo '</div>';
+								}
+
+								if(!empty($printify_files['preview_files']) && isset($printify_files['preview_files'])){
+									$preview_files = $printify_files['preview_files'];
+									echo '<div class="printify-print-providers-preview-files"><span class="printify-print-providers-label">Preview files:</span>';
+									foreach( $preview_files as $key => $url ){
+										echo '<a href="' . $url . '" target="_blank"><img src="' . $url . '"/></a>';
+									}
+									echo '</div>';
 								}
 							}
 						}
@@ -2018,5 +2383,17 @@ class Printify_Print_Providers_Admin {
 				echo "<mark class='order-status printify-print-providers-order-status'><img src='". $image_url ."' /></mark>";
 			}
 		}
+	}
+
+	/**
+	 * Function returns all IDs that have been saved in the plugins' settings
+	 *
+	 * @since    1.0
+	 * @return   array
+	 */
+	function get_printify_product_ids() {
+		$product_ids = get_option('printify_print_providers_product_ids');
+		$product_ids = explode(',', $product_ids);
+		return array_map('trim', $product_ids); //Removing whitespaces from the array
 	}
 }

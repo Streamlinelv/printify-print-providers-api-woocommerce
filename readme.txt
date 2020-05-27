@@ -11,98 +11,39 @@ Integrate your Printify orders with WooCommerce using API. Thiw will allow you t
 
 == Description ==
 
-This is the long description.  No limit, and you can use Markdown (as well as in the following sections).
+Plugin uses [API key authentication](https://swagger.io/docs/specification/authentication/api-keys) via HTTP headers (X-API-Key) to authenticate requests from Printify.
+At the moment plugin only supports fixed printing price (this means that printing price does not depend on different areas).
 
-For backwards compatibility, if this section is missing, the full length of the short description will be used, and
-Markdown parsed.
-
-A few notes about the sections above:
-
-*   "Contributors" is a comma separated list of wp.org/wp-plugins.org usernames
-*   "Tags" is a comma separated list of tags that apply to the plugin
-*   "Requires at least" is the lowest version that the plugin will work on
-*   "Tested up to" is the highest version that you've *successfully used to test the plugin*. Note that it might work on
-higher versions... this is just the highest one you've verified.
-*   Stable tag should indicate the Subversion "tag" of the latest stable version, or "trunk," if you use `/trunk/` for
-stable.
-
-    Note that the `readme.txt` of the stable tag is the one that is considered the defining one for the plugin, so
-if the `/trunk/readme.txt` file says that the stable tag is `4.3`, then it is `/tags/4.3/readme.txt` that'll be used
-for displaying information about the plugin.  In this situation, the only thing considered from the trunk `readme.txt`
-is the stable tag pointer.  Thus, if you develop in trunk, you can update the trunk `readme.txt` to reflect changes in
-your in-development version, without having that information incorrectly disclosed about the current stable version
-that lacks those changes -- as long as the trunk's `readme.txt` points to the correct stable tag.
-
-    If no stable tag is provided, it is assumed that trunk is stable, but you should specify "trunk" if that's where
-you put the stable version, in order to eliminate any doubt.
+Printify will not be able to update the order as soon as any of the products statuses inside the order are set to Anything else but Created. During this stage the order is considered as taken into Production and only shipping related information can be updated.
+As soon as any of the items are marked as Packaged or Shipped - shipping related information is no longer updatable from the side of Printify API. Only Order ID can be updated no matter the order status.
 
 == Installation ==
 
 1. Install the plugin through your WordPress plugins screen.
 1. Activate the plugin.
+1. Make sure you have WooCommerce installed and activated
+1. Open up WooCommerce > Products
+1. Open "Custom Printify product"
+1. Choose if the product should be simple or variable and add SKU values to the products you are planning on selling on Printify
+1. Go to WooCommerce > Settings > Advanced > Printify API and add all of your Product IDs that you are planning on using with Printify
+1. Collect all of the SKU you created previously and send them along with your API key to Printify. They will need this information to complete the API integration
 
 == Frequently Asked Questions ==
 
-= A question that someone might have =
+= How to integrate with Printify? =
 
-An answer to that question.
+If you are a Print Provider, you must first sign a contract with Printify. After this you will need to install and setup WooCommerce and add your products that you are planning to make available on Printify.
 
-= What about foo bar? =
+Each product must have a unique SKU that you will need to share with Printify along with API key that you will find in the plugin's settings.
+And to complete the integration, you will have to add all of your Product IDs (that you are planning on using with Printify) to the plugin's settings.
 
-Answer to foo bar dilemma.
+= What is the Printify API version that is used in the plugin? =
+
+The plugin integrates with Printify via v2020-03 version API. You can [find more information about it here](https://developers-stage.printify.com/print-providers/#printify-supply-api-v2020-03).
 
 == Screenshots ==
-
-1. This screen shot description corresponds to screenshot-1.(png|jpg|jpeg|gif). Note that the screenshot is taken from
-the /assets directory or the directory that contains the stable readme.txt (tags or trunk). Screenshots in the /assets
-directory take precedence. For example, `/assets/screenshot-1.png` would win over `/tags/4.3/screenshot-1.png`
-(or jpg, jpeg, gif).
-2. This is the second screen shot
 
 == Changelog ==
 
 = 1.0 =
-* A change since the previous version.
-* Another change.
-
-= 0.5 =
-* List versions from most recent at top to oldest at bottom.
-
-== Upgrade Notice ==
-
-= 1.0 =
-Upgrade notices describe the reason a user should upgrade.  No more than 300 characters.
-
-= 0.5 =
-This version fixes a security related bug.  Upgrade immediately.
-
-== Arbitrary section ==
-
-You may provide arbitrary sections, in the same format as the ones above.  This may be of use for extremely complicated
-plugins where more information needs to be conveyed that doesn't fit into the categories of "description" or
-"installation."  Arbitrary sections will be shown below the built-in sections outlined above.
-
-== A brief Markdown Example ==
-
-Ordered list:
-
-1. Some feature
-1. Another feature
-1. Something else about the plugin
-
-Unordered list:
-
-* something
-* something else
-* third thing
-
-Here's a link to [WordPress](http://wordpress.org/ "Your favorite software") and one to [Markdown's Syntax Documentation][markdown syntax].
-Titles are optional, naturally.
-
-[markdown syntax]: http://daringfireball.net/projects/markdown/syntax
-            "Markdown is what the parser uses to process much of the readme file"
-
-Markdown uses email style notation for blockquotes and I've been told:
-> Asterisks for *emphasis*. Double it up  for **strong**.
-
-`<?php code(); // goes in backticks ?>`
+* Hello world

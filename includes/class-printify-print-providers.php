@@ -166,6 +166,10 @@ class Printify_Print_Providers {
 		$this->loader->add_action( 'before_delete_post', $plugin_admin, 'delete_printify_order' );
 		$this->loader->add_filter( 'manage_edit-shop_order_columns', $plugin_admin, 'add_printify_column', 20 );
 		$this->loader->add_action( 'manage_posts_custom_column', $plugin_admin, 'insert_data_in_printify_column' );
+		$this->loader->add_action( 'woocommerce_product_options_pricing', $plugin_admin, 'add_simple_product_pricing_fields');
+		$this->loader->add_action( 'woocommerce_process_product_meta', $plugin_admin, 'save_simple_product_pricing_fields');
+		$this->loader->add_action( 'woocommerce_variation_options_pricing', $plugin_admin, 'add_variable_product_pricing_fields', 10, 3);
+		$this->loader->add_action( 'woocommerce_save_product_variation', $plugin_admin, 'save_variable_product_pricing_field_data', 10, 2 );
 	}
 
 	/**

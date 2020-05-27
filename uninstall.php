@@ -41,6 +41,7 @@ wp_delete_post( get_option('printify_print_providers_custom_product_id'), true )
 //Removing Custom options created with the plugin
 delete_option( 'printify_print_providers_api_key' );
 delete_option( 'printify_print_providers_statuses' );
+delete_option( 'printify_print_providers_product_ids' );
 delete_option( 'printify_print_providers_logging' );
 delete_option( 'printify_print_providers_version_number' );
 delete_option( 'printify_print_providers_custom_product_id' );

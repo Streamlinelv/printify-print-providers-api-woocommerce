@@ -468,7 +468,7 @@ class Printify_Print_Providers_Admin {
 	 * @since    1.0
 	 */
 	public function create_custom_api_routes(){
-		$printify_api_base = 'v2020-03';
+		$printify_api_base = 'v2019-06';
 		register_rest_route( $printify_api_base, '/orders.json', array(
 			'methods' => 'POST',
 			'callback' => array($this, 'create_order'),
@@ -481,19 +481,19 @@ class Printify_Print_Providers_Admin {
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+)/events.json', array(
+		register_rest_route( $printify_api_base, '/order/(?P<printify_id>[a-z0-9\-]+)/events.json', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'get_order_events'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+).json', array(
+		register_rest_route( $printify_api_base, '/order/(?P<printify_id>[a-z0-9\-]+).json', array(
 			'methods' => 'PUT',
 			'callback' => array($this, 'update_order'),
 			'permission_callback' => array( $this, 'check_api_key' )
 		));
 
-		register_rest_route( $printify_api_base, '/orders/(?P<printify_id>[a-z0-9\-]+)/cancel.json', array(
+		register_rest_route( $printify_api_base, '/order/(?P<printify_id>[a-z0-9\-]+)/cancel.json', array(
 			'methods' => 'POST',
 			'callback' => array($this, 'cancel_order'),
 			'permission_callback' => array( $this, 'check_api_key' )
@@ -536,6 +536,57 @@ class Printify_Print_Providers_Admin {
 				$body = json_decode($data->get_body());
 				//Checking if Order hasn't been previously already created
 				if(!$this->check_if_order_exists($body->id)){
+					$errors = array();
+
+					//Checking if mandatory fields have been provided from Printify. If any errors occur, the Order is not created
+					if(!isset($body->address_to)){
+						$errors[] = array(
+							'field' 	=> 'address_to',
+							'message' 	=> 'Address to was not provided',
+							'code' 		=> 'address_to' // Optional attribute
+						);
+					}
+
+					if(!isset($body->address_from)){
+						$errors[] = array(
+							'field' 	=> 'address_from',
+							'message' 	=> 'Address from was not provided',
+							'code' 		=> 'address_from' // Optional attribute
+						);
+					}
+
+					if(empty($body->address_to->address1)){
+						$errors[] = array(
+							'field' 	=> 'address_to.address1',
+							'message' 	=> 'Address to can not be blank',
+							'code' 		=> 'address_to' // Optional attribute
+						);
+					}
+
+					if(!isset($body->shipping)){
+						$errors[] = array(
+							'field' 	=> 'shipping',
+							'message' 	=> 'Shipping information was not provided',
+							'code' 		=> 'shipping' // Optional attribute
+						);
+					}
+
+					if(empty($body->shipping->carrier)){
+						$errors[] = array(
+							'field' 	=> 'carrier',
+							'message' 	=> 'Shipping carrier was not provided',
+							'code' 		=> 'shipping' // Optional attribute
+						);
+					}
+
+					if(empty($body->shipping->priority)){
+						$errors[] = array(
+							'field' 	=> 'priority',
+							'message' 	=> 'Shipping priority was not provided',
+							'code' 		=> 'shipping' // Optional attribute
+						);
+					}
+
 					//Checking if we have values coming from the Printify
 					(isset($body->address_to->address1)) ? $address1_to = $body->address_to->address1 : $address1_to = '';
 					(isset($body->address_to->address2)) ? $address2_to = $body->address_to->address2 : $address2_to = '';
@@ -586,42 +637,50 @@ class Printify_Print_Providers_Admin {
 					$order = wc_create_order();
 					$product_id = $this->create_custom_printify_product(); //Creating a new product if it doesn't already exist
 					$affected_items = array();
-					$errors = array();
 
 					//Adding line items to our new order coming in from Printify
-					foreach ($body->items as $key => $item) {
-						$product_id = wc_get_product_id_by_sku($item->sku); //Retrieving product variation by SKU
-						$product = wc_get_product($product_id);
+					if(isset($body->items)){
+						foreach ($body->items as $key => $item) {
+							$product_id = wc_get_product_id_by_sku($item->sku); //Retrieving product variation by SKU
+							$product = wc_get_product($product_id);
 
-						if($product){
-							$product->set_name($product->get_name() . ' (ID: ' . $item->id . ')');
-							$line_item_id = $order->add_product( $product, $item->quantity ); //Adding product to the order
-							
-							//Adding custom meta data to each product
-							$print_files = array();
-							$preview_files = array();
-							foreach ($item->print_files as $key => $print_file) {
-								$print_files[$key] = $print_file; //Create an array of print files
+							if($product){
+								$product->set_name($product->get_name() . ' (ID: ' . $item->id . ')');
+								$line_item_id = $order->add_product( $product, $item->quantity ); //Adding product to the order
+								
+								//Adding custom meta data to each product
+								$print_files = array();
+								$preview_files = array();
+								foreach ($item->print_files as $key => $print_file) {
+									$print_files[$key] = $print_file; //Create an array of print files
+								}
+								foreach ($item->preview_files as $key => $preview_file) {
+									$preview_files[$key] = $preview_file; //Create an array of preview files
+								}
+								wc_add_order_item_meta($line_item_id, 'printify_files', array(
+									'print_files' => $print_files,
+									'preview_files' => $preview_files
+								));
+
+								//Updating line item status to Created
+								update_post_meta( $line_item_id, '_printify_print_providers_item_status', 0 );
+								$affected_items[$line_item_id] = $item->id;
+
+							}else{ //In case we are unable to identify item's SKU received from Printify
+								$errors[] = array(
+									'field' 	=> 'item',
+									'message' 	=> 'Received product SKU: '. $item->sku .' does not exist',
+									'code' 		=> 'item' // Optional attribute
+								);
 							}
-							foreach ($item->preview_files as $key => $preview_file) {
-								$preview_files[$key] = $preview_file; //Create an array of preview files
-							}
-							wc_add_order_item_meta($line_item_id, 'printify_files', array(
-								'print_files' => $print_files,
-								'preview_files' => $preview_files
-							));
-
-							//Updating line item status to Created
-							update_post_meta( $line_item_id, '_printify_print_providers_item_status', 0 );
-							$affected_items[$line_item_id] = $item->id;
-
-						}else{ //In case we are unable to identify item's SKU received from Printify
-							$errors[] = array(
-								'field' 	=> 'item',
-								'message' 	=> 'Received product SKU: '. $item->sku .' does not exist',
-								'code' 		=> 'item' // Optional attribute
-							);
 						}
+
+					}else{
+						$errors[] = array(
+							'field' 	=> 'items',
+							'message' 	=> 'Items were not provided',
+							'code' 		=> 'items' // Optional attribute
+						);
 					}
 
 					if(!$errors){ //If no errors have occured
@@ -664,59 +723,72 @@ class Printify_Print_Providers_Admin {
 						//Creating array to be passed to events function
 						$event_array = array(
 							$item->id => array(
-								'action' => 'Created',
+								'action' => 'created',
 								'affected_items' => $affected_items
 							)
 						);
 						$this->add_printify_note($event_array, $new_order_id); //Adding note used by Printify Tracking API
 
 						$response = array(
-							'status'		=> 'success',
 							'code'			=> 200,
-							'id'			=> $body->id,
-							'reference_id'	=> $new_order_id,
 							'message'		=> 'Printify order successfully ceated. Order: ' . $new_order_id,
-							'level'			=> 'info'
+							'level'			=> 'info',
+							'printify'		=> array(
+								'status'		=> 'success',
+								'id'			=> $body->id,
+								'reference_id'	=> (string)$new_order_id
+							)
 						);
 
 					}else{ //If some of the products were not created
 						$response = array(
-							'status'	=> 'failed',
 							'code'		=> 422,
-				  			'message'	=> 'Unable to add all or some of the products. Order: ' . $body->id .'. Errors: ' . json_encode($errors),
+							'message'	=> 'Unable to add all or some of the products. Order: ' . $body->id .'. Errors: ' . json_encode($errors),
 				  			'level'		=> 'warning',
-				  			'errors'	=> $errors
+							'printify'	=> array(
+								'status'	=> 'failed',
+					  			'errors'	=> $errors
+							)
 						);
 					}
 
 				}else{ //If order has already been created
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 304,
-			  			'message'	=> 'The request has already been received and order created. ID: ' . $body->id,
-			  			'level'		=> 'warning'
+						'message'	=> 'The request has already been received and order created. ID: ' . $body->id,
+			  			'level'		=> 'warning',
+			  			'printify'	=> array(
+							'status'	=> 'failed',
+				  			'message'	=> 'The request has already been received and order created. ID: ' . $body->id
+				  		)
 					);
 				}
 
 			}else{ //If Printify API doesn't provide data
 				$response = array(
-					'status'	=> 'failed',
 					'code'		=> 404,
-		  			'message'	=> 'Printify request is missing body data',
-		  			'level'		=> 'error'
+					'message'	=> 'Printify request is missing body data',
+		  			'level'		=> 'error',
+					'printify'	=> array(
+						'status'	=> 'failed',
+			  			'message'	=> 'Printify request is missing body data'
+			  		)
 				);
 			}
 
 		}else{ //If WooCommerce has been disabled
 			$response = array(
-				'status'	=> 'failed',
 				'code'		=> 404,
-	  			'message'	=> 'WooCommerce has been deactivated or is not installed',
-	  			'level'		=> 'error'
+				'message'	=> 'WooCommerce has been deactivated or is not installed',
+	  			'level'		=> 'error',
+				'printify'	=> array(
+					'status'	=> 'failed',
+		  			'message'	=> 'WooCommerce has been deactivated or is not installed'
+		  		)
 			);
 		}
 		$this->log( $response['level'], $response['message'] );
-		return new WP_REST_Response( $response, $response['code'] );
+		return new WP_REST_Response( $response['printify'], $response['code'] );
 	}
 
 	/**
@@ -738,8 +810,8 @@ class Printify_Print_Providers_Admin {
 					if($order_id){ //If order exists in our database
 						$order = wc_get_order($order_id->woocommerce_order_id);
 						if($order){ //If WooCommerce order exists
-							$started_processing = array('Picked','Printed','Packaged','Reprint','X-Updates','On hold','Shipped','Canceled'); //Array listing all statuses of an order that has been taken into production
-							$packaged_or_shipped = array('Packaged','Shipped'); //Array listing all statuses of an order that has been prepared for shipping
+							$started_processing = array('picked','printed','packaged','reprint','x-updates','on hold','shipped','canceled'); //Array listing all statuses of an order that has been taken into production
+							$packaged_or_shipped = array('packaged','shipped'); //Array listing all statuses of an order that has been prepared for shipping
 							$statuses = $this->get_product_statuses($order_id->woocommerce_order_id);
 							$can_update = true;
 							$errors = array();
@@ -1137,78 +1209,99 @@ class Printify_Print_Providers_Admin {
 									$this->add_event( $order_id->woocommerce_order_id, 'Printify updated order. Updated fields: '. $updated_field_string, false );
 
 									$response = array(
-										'status'		=> 'success',
 										'code'			=> 200,
 										'message'		=> 'Printify order successfully updated. Order: ' . $order_id->woocommerce_order_id,
-										'level'			=> 'info'
+										'level'			=> 'info',
+										'printify'		=> array(
+											'status'		=> 'success'
+										)
 									);
 
 								}else{ //If we encounter some errors, not updating any of the fields and returning errors
 									$response = array(
-										'status'	=> 'failed',
 										'code'		=> 422,
-							  			'message'	=> 'Unable to update Printify order. Errors: ' . json_encode($errors),
-							  			'level'		=> 'error',
-							  			'errors'	=> $errors
+										'message'	=> 'Unable to update Printify order. Errors: ' . json_encode($errors),
+								  		'level'		=> 'error',
+										'printify'	=> array(
+											'status'	=> 'failed',
+								  			'errors'	=> $errors
+								  		)
 									);
 								}
 
 							}else{ //If at least one of the top-level elements is not allowed to be updated
 								$response = array(
-									'status'	=> 'failed',
 									'code'		=> 422,
-						  			'message'	=> 'Unable to update Printify order. Errors: ' . json_encode($errors),
-						  			'level'		=> 'error',
-						  			'errors'	=> $errors
+									'message'	=> 'Unable to update Printify order. Errors: ' . json_encode($errors),
+							  		'level'		=> 'error',
+									'printify'	=> array(
+										'status'	=> 'failed',
+							  			'errors'	=> $errors
+							  		)
 								);
 							}
 
-						}else{//If WooCommerce order doesn't exist
+						}else{//If order has been deleted
 							$response = array(
-								'status'	=> 'failed',
 								'code'		=> 404,
-					  			'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id'],
-					  			'level'		=> 'error'
+								'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id'],
+						  		'level'		=> 'error',
+								'printify'	=> array(
+									'status'	=> 'failed',
+						  			'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id']
+						  		)
 							);
 						}
 
 					}else{
 						$response = array(
-							'status'	=> 'failed',
 							'code'		=> 404,
-				  			'message'	=> 'Order is not found. ID: '. $data['printify_id'],
-				  			'level'		=> 'error'
+							'message'	=> 'Order is not found. ID: '. $data['printify_id'],
+							'level'		=> 'error',
+							'printify'	=> array(
+								'status'	=> 'failed',
+					  			'message'	=> 'Order is not found. ID: '. $data['printify_id']
+					  		)
 						);
 					}
 
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
 			  			'message'	=> 'Request from Printify did not include order ID',
-			  			'level'		=> 'error'
+			  			'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+				  			'message'	=> 'Request from Printify did not include order ID'
+				  		)
 					);
 				}
 
 			}else{ //If Printify API doesn't provide data
 				$response = array(
-					'status'	=> 'failed',
 					'code'		=> 404,
-		  			'message'	=> 'Printify request is missing body data',
-		  			'level'		=> 'error'
+					'message'	=> 'Printify request is missing body data',
+		  			'level'		=> 'error',
+					'printify'	=> array(
+						'status'	=> 'failed',
+			  			'message'	=> 'Printify request is missing body data'
+			  		)
 				);
 			}
 
 		}else{ //If WooCommerce has been disabled
 			$response = array(
-				'status'	=> 'failed',
 				'code'		=> 404,
-	  			'message'	=> 'WooCommerce has been deactivated or is not installed',
-	  			'level'		=> 'error'
+				'message'	=> 'WooCommerce has been deactivated or is not installed',
+	  			'level'		=> 'error',
+				'printify'	=> array(
+					'status'	=> 'failed',
+		  			'message'	=> 'WooCommerce has been deactivated or is not installed'
+		  		)
 			);
 		}
 		$this->log( $response['level'], $response['message'] );
-		return new WP_REST_Response( $response, $response['code'] );
+		return new WP_REST_Response( $response['printify'], $response['code'] );
 	}
 
 	/**
@@ -1311,73 +1404,84 @@ class Printify_Print_Providers_Admin {
 
 					//Return back order data
 					$response = array(
-						'status'		=> 'success',
-						'code'			=> 200,
-						'message'		=> 'Printify order successfully returned. Order: '. $order_id->woocommerce_order_id,
-						'level'			=> 'info',
-						'id'			=> $order_id->printify_order_id,
-						'reference_id'	=> $order_id->woocommerce_order_id,
-						'sample'		=> $sample,
-						'reprint'		=> $reprint,
-						'xqc'			=> $xqc,
-						'address_to'	=> array(
-							'address1'		=> $order_data['billing']['address_1'],
-							'address2'		=> $order_data['billing']['address_2'],
-							'city'			=> $order_data['billing']['city'],
-							'zip'   		=> $order_data['billing']['postcode'],
-							'country'   	=> $order_data['billing']['country'],
-							'region'      	=> $order_data['billing']['state'],
-							'first_name' 	=> $order_data['billing']['first_name'],
-							'last_name'  	=> $order_data['billing']['last_name'],
-							'email'  		=> $email,
-							'phone'      	=> $order_data['billing']['phone']
-						),
-						'address_from'		=> array(
-							'address1'  	=> $order_data['shipping']['address_1'],
-							'address2'  	=> $order_data['shipping']['address_2'],
-							'city'       	=> $order_data['shipping']['city'],
-							'zip'   		=> $order_data['shipping']['postcode'],
-							'country'    	=> $order_data['shipping']['country'],
-							'region'      	=> $order_data['shipping']['state'],
-							'company' 	 	=> $order_data['shipping']['company'],
-							'email'  		=> $email_from,
-							'phone'      	=> $phone_from
-						),
-						'shipping'		=> array(
-							'carrier'  		=> $carrier,
-							'priority'      => $priority
-						),
-						'items'			=> $line_items
+						'code'		=> 200,
+						'message'	=> 'Printify order successfully returned. Order: '. $order_id->woocommerce_order_id,
+						'level'		=> 'info',
+						'printify'	=> array(
+							'id'			=> $order_id->printify_order_id,
+							'reference_id'	=> (string)$order_id->woocommerce_order_id,
+							'sample'		=> $sample,
+							'reprint'		=> $reprint,
+							'xqc'			=> $xqc,
+							'address_to'	=> array(
+								'address1'		=> $order_data['billing']['address_1'],
+								'address2'		=> $order_data['billing']['address_2'],
+								'city'			=> $order_data['billing']['city'],
+								'zip'   		=> $order_data['billing']['postcode'],
+								'country'   	=> $order_data['billing']['country'],
+								'region'      	=> $order_data['billing']['state'],
+								'first_name' 	=> $order_data['billing']['first_name'],
+								'last_name'  	=> $order_data['billing']['last_name'],
+								'email'  		=> $email,
+								'phone'      	=> $order_data['billing']['phone']
+							),
+							'address_from'		=> array(
+								'address1'  	=> $order_data['shipping']['address_1'],
+								'address2'  	=> $order_data['shipping']['address_2'],
+								'city'       	=> $order_data['shipping']['city'],
+								'zip'   		=> $order_data['shipping']['postcode'],
+								'country'    	=> $order_data['shipping']['country'],
+								'region'      	=> $order_data['shipping']['state'],
+								'company' 	 	=> $order_data['shipping']['company'],
+								'email'  		=> $email_from,
+								'phone'      	=> $phone_from
+							),
+							'shipping'		=> array(
+								'carrier'  		=> $carrier,
+								'priority'      => $priority
+							),
+							'items'			=> $line_items
+						)
 					);
 
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
-			  			'message'	=> 'Order is not found. ID: '. $data['printify_id'],
-			  			'level'		=> 'error'
+						'message'	=> 'Order is not found. ID: '. $data['printify_id'],
+				  		'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+							'code'		=> 404,
+				  			'message'	=> 'Order is not found. ID: '. $data['printify_id']
+				  		)
 					);
 				}
 
 			}else{
 				$response = array(
-					'status'	=> 'failed',
 					'code'		=> 404,
-		  			'message'	=> 'Request from Printify did not include order ID',
-		  			'level'		=> 'error'
+					'message'	=> 'Request from Printify did not include order ID',
+			  		'level'		=> 'error',
+					'printify'	=> array(
+						'status'	=> 'failed',
+			  			'message'	=> 'Request from Printify did not include order ID'
+			  		)
 				);
 			}
 
 		}else{ //If WooCommerce has been disabled
 			$response = array(
-				'status'	=> 'failed',
 				'code'		=> 404,
-	  			'message'	=> 'WooCommerce has been deactivated or is not installed',
-	  			'level'		=> 'error'
+				'message'	=> 'WooCommerce has been deactivated or is not installed',
+	  			'level'		=> 'error',
+				'printify'	=> array(
+					'status'	=> 'failed',
+		  			'message'	=> 'WooCommerce has been deactivated or is not installed'
+		  		)
 			);
 		}
 		$this->log( $response['level'], $response['message'] );
-		return new WP_REST_Response( $response, $response['code'] );
+		return new WP_REST_Response( $response['printify'], $response['code'] );
 	}
 
 	/**
@@ -1440,45 +1544,98 @@ class Printify_Print_Providers_Admin {
 							    }
 							}
 						}
-					}
 
-					//Return back order event data
-					$response = array(
-						'status'	=> 'success',
-						'code'		=> 200,
-						'message'	=> 'Printify order events successfully returned. Order: '. $order_id->woocommerce_order_id,
-						'level'		=> 'info',
-						'events'	=> $events
-					);
+						//Calculating global order status
+						$statuses = $this->get_product_statuses($order_id->woocommerce_order_id);
+						$order_status = 'created';
+
+						if(in_array( 'canceled', $statuses )){ //If at least one of the products has status shipped
+							$order_status = 'canceled';
+						}
+						if(in_array( 'shipped', $statuses )){ //If at least one of the products has status shipped
+							$order_status = 'shipped';
+						}
+						if(in_array( 'packaged', $statuses )){ //If at least one of the products has status packaged
+							$order_status = 'packaged';
+						}
+						if(in_array( 'on hold', $statuses )){ //If at least one of the products has status on hold
+							$order_status = 'on hold';
+						}
+						if(in_array( 'reprint', $statuses )){ //If at least one of the products has status reprint
+							$order_status = 'reprint';
+						}
+						if(in_array( 'printed', $statuses )){ //If at least one of the products has status printed
+							$order_status = 'printed';
+						}
+						if(in_array( 'picked', $statuses )){ //If at least one of the products has status picked
+							$order_status = 'picked';
+						}
+						if(in_array( 'created', $statuses )){ //If at least one of the products has status created
+							$order_status = 'created';
+						}
+
+						//Return back order event data
+						$response = array(
+							'code'		=> 200,
+							'message'	=> 'Printify order events successfully returned. Order: '. $order_id->woocommerce_order_id,
+							'level'		=> 'info',
+							'printify'	=> array(
+								'status'	=> $order_status,
+								'events'	=> $events
+							)
+						);
+
+					}else{ //If no events found
+						$response = array(
+							'code'		=> 404,
+							'message'	=> 'No events found. ID: '. $data['printify_id'],
+					  		'level'		=> 'error',
+							'printify'	=> array(
+								'status'	=> 'failed',
+								'code'		=> 404,
+					  			'message'	=> 'No events found. ID: '. $data['printify_id']
+					  		)
+						);
+					}
 
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
-			  			'message'	=> 'Order is not found. ID: '. $data['printify_id'],
-			  			'level'		=> 'error'
+						'message'	=> 'Order is not found. ID: '. $data['printify_id'],
+				  		'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+							'code'		=> 404,
+				  			'message'	=> 'Order is not found. ID: '. $data['printify_id']
+				  		)
 					);
 				}
 
 			}else{
 				$response = array(
-					'status'	=> 'failed',
 					'code'		=> 404,
-		  			'message'	=> 'Request from Printify did not include order ID',
-		  			'level'		=> 'error'
+					'message'	=> 'Request from Printify did not include order ID',
+			  		'level'		=> 'error',
+					'printify'	=> array(
+						'status'	=> 'failed',
+			  			'message'	=> 'Request from Printify did not include order ID'
+			  		)
 				);
 			}
 
 		}else{ //If WooCommerce has been disabled
 			$response = array(
-				'status'	=> 'failed',
 				'code'		=> 404,
-	  			'message'	=> 'WooCommerce has been deactivated or is not installed',
-	  			'level'		=> 'error'
+				'message'	=> 'WooCommerce has been deactivated or is not installed',
+	  			'level'		=> 'error',
+				'printify'	=> array(
+					'status'	=> 'failed',
+		  			'message'	=> 'WooCommerce has been deactivated or is not installed'
+		  		)
 			);
 		}
 		$this->log( $response['level'], $response['message'] );
-		return new WP_REST_Response( $response, $response['code'] );
+		return new WP_REST_Response( $response['printify'], $response['code'] );
 	}
 
 	/**
@@ -1493,10 +1650,9 @@ class Printify_Print_Providers_Admin {
 				if($order_id){ //If order exists in our database
 					$order = wc_get_order($order_id->woocommerce_order_id);
 						if($order){ //If WooCommerce order exists
-							$started_processing = array('Picked','Printed','Packaged','Reprint','X-Updates','On hold','Shipped'); //Array listing all statuses of an order that has been taken into production
-							$packaged_or_shipped = array('Packaged','Shipped'); //Array listing all statuses of an order that has been prepared for shipping
-							$canceled = array('Canceled'); //Array listing all statuses of an order that has been canceled
-							$statuses = $this->get_product_statuses($order_id->woocommerce_order_id);
+							$started_processing = array('picked','printed','packaged','reprint','x-updates','on hold','shipped'); //Array listing all statuses of an order that has been taken into production
+							$packaged_or_shipped = array('packaged','shipped'); //Array listing all statuses of an order that has been prepared for shipping
+							$canceled = array('canceled'); //Array listing all statuses of an order that has been canceled
 
 							//If the request has no data, must cancel entire order
 							$items_to_cancel = false;
@@ -1513,6 +1669,23 @@ class Printify_Print_Providers_Admin {
 							$cancelation_issues = false;
 							$canceled_items = array();
 
+							//Creating array of all line item IDs so that we can test if the IDs provided by Printify exist in our current order at all
+							$item_id_array = array();
+							foreach ($items as $line_item_id => $item) {
+								$item_id_array[] = $this->get_line_item_id($item);
+							}
+
+							foreach ($items_to_cancel as $key => $item) {
+								if(!in_array($item, $item_id_array)){
+									$cancelation_issues = true;
+									$item_array[] = array(
+										'id' 		=> $item,
+										'status' 	=> 'failed',
+										'message' 	=> 'Item ID does not exist in the order'
+									);
+								}
+							}
+
 							foreach ($items as $line_item_id => $item) { //Handling product line items
 								$product_data = $item->get_data();
 								$item_status = get_post_meta( $product_data['id'],'_printify_print_providers_item_status', true );
@@ -1521,6 +1694,7 @@ class Printify_Print_Providers_Admin {
 
 								if($items_to_cancel){ //Canceling only specific items
 									if(in_array($line_item_printify_id, $items_to_cancel)){
+										write_log($status);
 										if(in_array($status, $canceled)){ //The item already has status Canceled
 											$cancelation_issues = true;
 											$item_array[] = array(
@@ -1566,7 +1740,7 @@ class Printify_Print_Providers_Admin {
 											'id' => $line_item_printify_id,
 											'status' => 'failed',
 											'message' => 'Item has already been canceled'
-										);	
+										);
 									}
 
 									elseif(in_array( $status, $packaged_or_shipped )){
@@ -1601,23 +1775,28 @@ class Printify_Print_Providers_Admin {
 
 							if($cancelation_issues){ //If at least one of the item was impossible to be canceled
 								$response = array(
-									'status'	=> 'failed',
 									'code'		=> 422,
 									'message'	=> 'Printify order was not canceled or partially canceled. Order: ' . $order_id->woocommerce_order_id . '. Items: '. json_encode($item_array),
 									'level'		=> 'info',
-									'items'		=> $item_array
+									'printify'	=> array(
+										'status'	=> 'failed',
+										'items'		=> $item_array
+									)
 								);
 
 							}else{ //If no issues detected
 								$response = array(
-									'status'	=> 'success',
 									'code'		=> 200,
 									'message'	=> 'Printify order successfully canceled. Order: '. $order_id->woocommerce_order_id,
 									'level'		=> 'info',
-									'items'		=> $item_array
+									'printify'	=> array(
+										'status'	=> 'success',
+										'items'		=> $item_array
+									)
 								);
-								if(!$items_to_cancel){ //If we had to cancel all items in the order - also marking the WooCommerce order itself as Canceled
+								if(!$items_to_cancel){ //If we had to cancel all items in the order - also marking WooCommerce order itself as Canceled
 									$order->update_status( 'cancelled', __('Printify has canceled the order', 'printify-print-providers'), TRUE );
+									
 								}
 							}
 
@@ -1634,47 +1813,68 @@ class Printify_Print_Providers_Admin {
 									$canceled_field_string .= ', ' . $field;
 								}
 							}
+							
 							if(!empty($canceled_field_string)){
 								$this->add_event( $order_id->woocommerce_order_id, 'Printify canceled items: ' . $canceled_field_string . $note, false );
+
+								$event_array = array(
+									array(
+										'action' => 'canceled',
+										'affected_items' => $canceled_items
+									)
+								);
+								$this->add_printify_note($event_array, $order_id->woocommerce_order_id); //Adding note used by Printify Tracking API
 							}
 
 						}else{//If WooCommerce order doesn't exist
 							$response = array(
-								'status'	=> 'failed',
 								'code'		=> 404,
-					  			'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id'],
-					  			'level'		=> 'error'
+								'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id'],
+						  		'level'		=> 'error',
+								'printify'	=> array(
+									'status'	=> 'failed',
+						  			'message'	=> 'Order has been deleted or was never there. ID: '. $data['printify_id']
+						  		)
 							);
 						}
 
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
-			  			'message'	=> 'Order is not found. ID: '. $data['printify_id'],
-			  			'level'		=> 'error'
+						'message'	=> 'Order is not found. ID: '. $data['printify_id'],
+				  		'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+				  			'message'	=> 'Order is not found. ID: '. $data['printify_id']
+				  		)
 					);
 				}
 
 			}else{
 				$response = array(
-					'status'	=> 'failed',
 					'code'		=> 404,
-		  			'message'	=> 'Request from Printify did not include order ID',
-		  			'level'		=> 'error'
+					'message'	=> 'Request from Printify did not include order ID',
+			  		'level'		=> 'error',
+					'printify'	=> array(
+						'status'	=> 'failed',
+			  			'message'	=> 'Request from Printify did not include order ID'
+			  		)
 				);
 			}
 
 		}else{ //If WooCommerce has been disabled
 			$response = array(
-				'status'	=> 'failed',
 				'code'		=> 404,
-	  			'message'	=> 'WooCommerce has been deactivated or is not installed',
-	  			'level'		=> 'error'
+				'message'	=> 'WooCommerce has been deactivated or is not installed',
+	  			'level'		=> 'error',
+				'printify'	=> array(
+					'status'	=> 'failed',
+		  			'message'	=> 'WooCommerce has been deactivated or is not installed'
+		  		)
 			);
 		}
 		$this->log( $response['level'], $response['message'] );
-		return new WP_REST_Response( $response, $response['code'] );
+		return new WP_REST_Response( $response['printify'], $response['code'] );
 	}
 
 	/**
@@ -1693,13 +1893,17 @@ class Printify_Print_Providers_Admin {
 					$product_found = true;
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
 			  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id'],
-			  			'level'		=> 'error'
+			  			'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+							'code'		=> 404,
+				  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id']
+				  		)
 					);
 					$this->log( $response['level'], $response['message'] );
-					return new WP_REST_Response( $response, $response['code'] );
+					return new WP_REST_Response( $response['printify'], $response['code'] );
 				}
 			}
 			if($product_found){ //If a specific SKU has been passed and it has been retrieved
@@ -1766,13 +1970,17 @@ class Printify_Print_Providers_Admin {
 					$product_found = true;
 				}else{
 					$response = array(
-						'status'	=> 'failed',
 						'code'		=> 404,
 			  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id'],
-			  			'level'		=> 'error'
+			  			'level'		=> 'error',
+						'printify'	=> array(
+							'status'	=> 'failed',
+							'code'		=> 404,
+				  			'message'	=> 'SKU is not found. SKU: '. $data['printify_id']
+				  		)
 					);
 					$this->log( $response['level'], $response['message'] );
-					return new WP_REST_Response( $response, $response['code'] );
+					return new WP_REST_Response( $response['printify'], $response['code'] );
 				}
 			}
 			if($product_found){ //If a specific SKU has been passed and it has been retrieved

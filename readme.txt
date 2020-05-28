@@ -39,7 +39,7 @@ And to complete the integration, you will have to add all of your Product IDs (t
 
 = What is the Printify API version that is used in the plugin? =
 
-The plugin integrates with Printify via v2020-03 version API. You can [find more information about it here](https://developers-stage.printify.com/print-providers/#printify-supply-api-v2020-03).
+The plugin integrates with Printify via v2019-06 version API. You can [find more information about it here](https://developers.printify.com/print-providers).
 
 == Screenshots ==
 

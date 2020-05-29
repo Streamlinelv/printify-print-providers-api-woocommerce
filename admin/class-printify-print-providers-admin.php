@@ -543,7 +543,7 @@ class Printify_Print_Providers_Admin {
 						$errors[] = array(
 							'field' 	=> 'address_to',
 							'message' 	=> 'Address to was not provided',
-							'code' 		=> 'address_to' // Optional attribute
+							'code' 		=> 'address_to'
 						);
 					}
 
@@ -551,15 +551,84 @@ class Printify_Print_Providers_Admin {
 						$errors[] = array(
 							'field' 	=> 'address_from',
 							'message' 	=> 'Address from was not provided',
-							'code' 		=> 'address_from' // Optional attribute
+							'code' 		=> 'address_from'
 						);
 					}
 
 					if(empty($body->address_to->address1)){
 						$errors[] = array(
-							'field' 	=> 'address_to.address1',
-							'message' 	=> 'Address to can not be blank',
-							'code' 		=> 'address_to' // Optional attribute
+							'address_to.address1' 	=> 'Was not provided',
+							'code' 					=> 'address_to'
+						);
+					}
+
+					if(empty($body->address_from->address1)){
+						$errors[] = array(
+							'address_from.address1' => 'Was not provided',
+							'code' 					=> 'address_from'
+						);
+					}
+
+					if(empty($body->address_to->city)){
+						$errors[] = array(
+							'address_to.city' 	=> 'Was not provided',
+							'code' 				=> 'address_to'
+						);
+					}
+
+					if(empty($body->address_from->city)){
+						$errors[] = array(
+							'address_from.city' => 'Was not provided',
+							'code' 				=> 'address_from'
+						);
+					}
+
+					if(empty($body->address_to->zip)){
+						$errors[] = array(
+							'address_to.zip' 	=> 'Was not provided',
+							'code' 				=> 'address_to'
+						);
+					}
+
+					if(empty($body->address_from->zip)){
+						$errors[] = array(
+							'address_from.zip' 	=> 'Was not provided',
+							'code' 				=> 'address_from'
+						);
+					}
+
+					if(empty($body->address_to->country)){
+						$errors[] = array(
+							'address_to.country' => 'Was not provided',
+							'code' 				 => 'address_to'
+						);
+					}
+
+					if(empty($body->address_from->country)){
+						$errors[] = array(
+							'address_from.country' 	=> 'Was not provided',
+							'code' 				 	=> 'address_from'
+						);
+					}
+
+					if(empty($body->address_to->first_name)){
+						$errors[] = array(
+							'address_to.first_name' => 'Was not provided',
+							'code' 					=> 'address_to'
+						);
+					}
+
+					if(empty($body->address_to->last_name)){
+						$errors[] = array(
+							'address_to.last_name' => 'Was not provided',
+							'code' 					=> 'address_to'
+						);
+					}
+
+					if(empty($body->address_from->company)){
+						$errors[] = array(
+							'address_from.company' 	=> 'Was not provided',
+							'code' 				 	=> 'address_from'
 						);
 					}
 
@@ -567,7 +636,7 @@ class Printify_Print_Providers_Admin {
 						$errors[] = array(
 							'field' 	=> 'shipping',
 							'message' 	=> 'Shipping information was not provided',
-							'code' 		=> 'shipping' // Optional attribute
+							'code' 		=> 'shipping'
 						);
 					}
 
@@ -575,7 +644,7 @@ class Printify_Print_Providers_Admin {
 						$errors[] = array(
 							'field' 	=> 'carrier',
 							'message' 	=> 'Shipping carrier was not provided',
-							'code' 		=> 'shipping' // Optional attribute
+							'code' 		=> 'shipping'
 						);
 					}
 
@@ -583,7 +652,7 @@ class Printify_Print_Providers_Admin {
 						$errors[] = array(
 							'field' 	=> 'priority',
 							'message' 	=> 'Shipping priority was not provided',
-							'code' 		=> 'shipping' // Optional attribute
+							'code' 		=> 'shipping'
 						);
 					}
 

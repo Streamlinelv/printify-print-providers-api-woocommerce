@@ -1618,7 +1618,7 @@ class Printify_Print_Providers_Admin {
 						$statuses = $this->get_product_statuses($order_id->woocommerce_order_id);
 						$order_status = 'created';
 
-						if(in_array( 'canceled', $statuses )){ //If at least one of the products has status shipped
+						if(in_array( 'canceled', $statuses )){ //If at least one of the products has status canceled
 							$order_status = 'canceled';
 						}
 						if(in_array( 'shipped', $statuses )){ //If at least one of the products has status shipped
@@ -1763,7 +1763,6 @@ class Printify_Print_Providers_Admin {
 
 								if($items_to_cancel){ //Canceling only specific items
 									if(in_array($line_item_printify_id, $items_to_cancel)){
-										write_log($status);
 										if(in_array($status, $canceled)){ //The item already has status Canceled
 											$cancelation_issues = true;
 											$item_array[] = array(

@@ -761,14 +761,21 @@ class Printify_Print_Providers_Admin {
 						if( $email_to ){
 							$order->update_meta_data( 'Customer Email', $email_to );
 						}
+						
 						if(isset($body->sample)){
-							$order->update_meta_data( 'Sample', 'Yes' );
+							if($body->sample){
+								$order->update_meta_data( 'Sample', 'Yes' );
+							}
 						}
 						if(isset($body->reprint)){
-							$order->update_meta_data( 'Reprint', 'Yes' );
+							if($body->reprint){
+								$order->update_meta_data( 'Reprint', 'Yes' );
+							}
 						}
 						if(isset($body->xqc)){
-							$order->update_meta_data( 'Extra Quality Care', 'Yes' );
+							if($body->xqc){
+								$order->update_meta_data( 'Extra Quality Care', 'Yes' );
+							}
 						}
 						$order->update_meta_data( '_printify_order', 1 ); //Used to determine if the order came from Printify
 

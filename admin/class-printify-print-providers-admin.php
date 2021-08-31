@@ -2183,18 +2183,11 @@ class Printify_Print_Providers_Admin {
 		$available_printify_statuses = get_option( 'printify_print_providers_statuses' );
         if(isset($available_printify_statuses)) {
             if (!empty($product) && isset($product)){
-				$post_type = $product->post_type;
 				$product_id = $product->get_id();
-                $printify_product = get_post_meta( $item_id, '_printify_print_providers_item_status', true );
+               	$order = wc_get_order(get_the_ID());
+				$printify_order = $order->get_meta('_printify_order'); //Check if order came from Printify
 
-               	if( $printify_product === '' ){
-               		$printify_product = false;
-               	}else{
-               		$printify_product = true;
-               	}
-
-                if (!empty($post_type) && ('product' === $post_type || 'product_variation' === $post_type)  &&  $printify_product ) { //If we are looking at a product and it is Printify product
-
+                if ( $printify_order ) { //If we are looking at Printify order
                 	//Getting current data values
 	                $item_status = get_post_meta( $item_id, '_printify_print_providers_item_status', true );
 	                $item_tracking_nr = get_post_meta( $item_id, '_printify_print_providers_item_tracking_nr', true );

@@ -2162,7 +2162,7 @@ class Printify_Print_Providers_Admin {
 	 * @since    1.0
 	 * @return   Integer | False
 	 */
-	function add_event($order_id, $information = array(), $encode ){
+	function add_event($order_id, $information = array(), $encode = true ){
 		$order = wc_get_order($order_id);
 		if($order){
 			if($encode == true){ //Encoding data to easily return it back to Printify Events API
@@ -2270,14 +2270,14 @@ class Printify_Print_Providers_Admin {
 		if( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 			return $post_id;
 		}// Exit if it's an autosave
-		$custom_action = filter_input( INPUT_POST, 'action', FILTER_SANITIZE_STRING );
-		$custom_post_type = filter_input( INPUT_POST, 'post_type', FILTER_SANITIZE_STRING );
-		$post_data = filter_input_array( INPUT_POST, FILTER_SANITIZE_STRING );
-		$order_item_id = (isset( $post_data['order_item_id']) && !empty( $post_data['order_item_id'] ) ) ? $post_data['order_item_id'] : array();
-		$order_id = (isset( $post_data['post_ID']) && !empty( $post_data['post_ID'] ) ) ? $post_data['post_ID'] : false;
 
-		if('editpost' === $custom_action && 'shop_order' === $custom_post_type){
-			if(isset($order_item_id) && is_array($order_item_id)){
+		$custom_action = isset( $_POST['action'] ) ? sanitize_text_field( $_POST['action'] ) : '';
+		$custom_post_type = isset( $_POST['post_type'] ) ? sanitize_text_field( $_POST['post_type'] ) : '';
+		$order_item_id = isset( $_POST['order_item_id'] ) && !empty( $_POST['order_item_id'] ) ? $_POST['order_item_id'] : array();
+		$order_id = isset( $_POST['post_ID'] ) && !empty( $_POST['post_ID'] ) ? $_POST['post_ID'] : false;
+
+		if( 'editpost' === $custom_action && 'shop_order' === $custom_post_type ){
+			if( isset( $order_item_id ) && is_array( $order_item_id ) ){
 				
 				$status = '';
 				$tracking_nr = '';
@@ -2301,13 +2301,13 @@ class Printify_Print_Providers_Admin {
 
 					//Retrieving data both from post saving and one that is saved in the database
 					$item_status = get_post_meta( $item_id, '_printify_print_providers_item_status', true );
-					$item_status_data = filter_input( INPUT_POST, '_printify_print_providers_item_status_' . $item_id, FILTER_SANITIZE_STRING );
+					$item_status_data = isset( $_POST['_printify_print_providers_item_status_' . $item_id] ) ? sanitize_text_field( $_POST['_printify_print_providers_item_status_' . $item_id] ) : '';
 					$item_tracking_nr = get_post_meta( $item_id, '_printify_print_providers_item_tracking_nr', true );
-					$item_tracking_nr_data = filter_input( INPUT_POST, '_printify_print_providers_item_tracking_nr_' . $item_id, FILTER_SANITIZE_STRING );
+					$item_tracking_nr_data = isset( $_POST['_printify_print_providers_item_tracking_nr_' . $item_id] ) ? sanitize_text_field( $_POST['_printify_print_providers_item_tracking_nr_' . $item_id] ) : '';
 					$item_carrier = get_post_meta( $item_id, '_printify_print_providers_item_carrier', true );
-					$item_carrier_data = filter_input( INPUT_POST, '_printify_print_providers_item_carrier_' . $item_id,FILTER_SANITIZE_STRING );
+					$item_carrier_data = isset( $_POST['_printify_print_providers_item_carrier_' . $item_id] ) ? sanitize_text_field( $_POST['_printify_print_providers_item_carrier_' . $item_id] ) : '';
 					$item_notes = get_post_meta( $item_id, '_printify_print_providers_item_notes', true );
-					$item_notes_data = filter_input( INPUT_POST, '_printify_print_providers_item_notes_' . $item_id,FILTER_SANITIZE_STRING );
+					$item_notes_data = isset( $_POST['_printify_print_providers_item_notes_' . $item_id] ) ? sanitize_text_field( $_POST['_printify_print_providers_item_notes_' . $item_id] ) : '';
 					
 					//In case the value have been changed, save them in the database
 					if($item_status !== $item_status_data){ 

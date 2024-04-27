@@ -2016,7 +2016,7 @@ class Printify_Print_Providers_Admin {
 			if($data->get_params()){
 				$attributes = $data->get_params();
 				$limit = null;
-				$offset = null;
+				$offset = 0;
 				if(isset($attributes['limit'])){
 					$limit = $attributes['limit'];
 				}
@@ -2585,17 +2585,15 @@ class Printify_Print_Providers_Admin {
 	 * @return   string | false
 	 */
 	public function get_status($id) {
+		$result = false;
 		$statuses = get_option('printify_print_providers_statuses');
 		foreach ($statuses as $key => $status) {
 			if($key == $id){
 				$result = $status;
 			}
 		}
-		if($result){
-			return $result;
-		}else{
-			return false;
-		}
+		
+		return $result;
 	}
 
 	/**
